@@ -102,7 +102,7 @@ export async function query(arg: string, options: IQueryOptions) {
     // Other Activities
     await scope.run(() =>
       // simulate delay (while record is written)
-      _mockAdditionalActivities(5000)
+      _mockAdditionalActivities(85000)
     );
 
     // delete schedule
@@ -128,25 +128,20 @@ export async function query(arg: string, options: IQueryOptions) {
       log.error('Workflow failed', { error: e });
       throw e;
     }
-  }
-
-  try {
-    if (!options.referenceId)
-      throw new Error('Reference ID not found encountered');
-    if (options.isManual && !success) {
+  } finally {
+    const isValidManualOperation = options.isManual && options.referenceId;
+    if (isValidManualOperation && !success) {
       await CancellationScope.nonCancellable(() =>
         unpauseQueryStatusSchedule(options.referenceId)
       );
     }
 
     // graceful cleanup
-    if (options.isManual && success) {
+    if (isValidManualOperation && success) {
       await CancellationScope.nonCancellable(() =>
         deleteReferenceSchedule(options.referenceId)
       );
     }
-  } catch (e) {
-    log.error('Error in unpausing schedule', { error: e });
   }
 
   return {
