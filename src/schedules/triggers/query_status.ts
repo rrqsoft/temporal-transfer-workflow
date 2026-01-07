@@ -37,8 +37,8 @@ export const run = async (proposal_id: string, isManual = false) => {
       ],
     },
     state: {
-      remainingActions: isManual ? 1 : 3,
-      note: isManual ? 'Only 1 time' : 'Only 3 times',
+      //   remainingActions: isManual ? 1 : 3,
+      //   note: isManual ? 'Only 1 time' : 'Only 3 times',
       // ISSUE / Bug with ScheduleOverlapPolicy.CANCEL_OTHER
       // the Action triggered by "triggerImmediately" flag doesn't receive cancellation
       //   triggerImmediately: true,

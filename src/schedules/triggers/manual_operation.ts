@@ -22,7 +22,7 @@ const run = async () => {
     // NOTE: abort the    current running workflow for this id
     await abortQueryStatusSchedules(id);
     // NOTE: delete all future scheduled workflows for this id
-    await deleteQueryStatusSchedules(id);
+    // await deleteQueryStatusSchedules(id);
 
     // // do another query for query
     await query(`${id}-manual`, true);

@@ -10,14 +10,15 @@ import * as activities from './activities';
 import { abortSignal } from './signals';
 import { queryAborted } from './queries';
 
-const { checkStatus, writeRecord } = proxyActivities<typeof activities>({
+const { checkStatus, writeRecord, randomSuccess } = proxyActivities<
+  typeof activities
+>({
   startToCloseTimeout: '1 minute',
   retry: {
     maximumAttempts: 2,
     backoffCoefficient: 2, //exponential backoff mechanism,
     nonRetryableErrorTypes: ['CancelledFailure'], // for explicit abort query (race condition mitigation)
   },
-  heartbeatTimeout: '2 seconds',
 });
 
 const { _mockAdditionalActivities } = proxyActivities<typeof activities>({
@@ -77,6 +78,7 @@ export async function query(arg: string, options: IQueryOptions) {
     throw e;
   }
 
+  let success = false;
   try {
     await scope.run(() => writeRecord(arg));
 
@@ -89,12 +91,13 @@ export async function query(arg: string, options: IQueryOptions) {
     // Other Activities
     await scope.run(() =>
       // simulate delay (while record is written)
-      _mockAdditionalActivities(30000)
+      _mockAdditionalActivities(5000)
     );
 
     // delete schedule
+    success = await scope.run(() => randomSuccess());
     const deleteWhenOptions = {
-      maxActions: 3,
+      success,
       isManual: options.isManual ?? false,
     };
     await scope.run(() => cleanUpScheduleWhenDone(arg, deleteWhenOptions));
@@ -113,7 +116,7 @@ export async function query(arg: string, options: IQueryOptions) {
   }
 
   return {
-    success: true,
+    success,
   };
 }
 

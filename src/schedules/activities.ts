@@ -1,9 +1,6 @@
-import { loadClientConnectConfig } from '@temporalio/envconfig';
 import { DB } from './db';
 const db = DB.getInstance();
 import { sleep, Context } from '@temporalio/activity';
-import { Client, Connection } from '@temporalio/client';
-import { namespace } from '../shared';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS records (
@@ -46,7 +43,7 @@ export async function revertRecord(str: string) {
 }
 
 interface IDeleteQueryStatusSchedulesOptions {
-  maxActions: number;
+  success: boolean;
   isManual: boolean;
 }
 export const cleanUpScheduleWhenDone = async (
@@ -57,14 +54,17 @@ export const cleanUpScheduleWhenDone = async (
 
   const handle = client.schedule.getHandle(proposal_id);
 
-  const description = await handle.describe();
-  const actionsTaken = description.info.numActionsTaken;
+  // const description = await handle.describe();
+  // const actionsTaken = description.info.numActionsTaken;
 
-  if (actionsTaken < options.maxActions && !options.isManual) {
-    console.log('Not deleting schedule', proposal_id, actionsTaken);
-    return { scheduleDeleted: false };
+  if (!options.success || options.isManual) {
+    return { scheduleDeleted: false, ...options };
   }
-  console.log('Deleting schedule', proposal_id, actionsTaken);
   await handle.delete();
-  return { scheduleDeleted: true, actionsTaken };
+  return { scheduleDeleted: true, ...options };
+};
+
+export const randomSuccess = async () => {
+  await sleep(1000); // fake delay
+  return Math.random() < 0.1;
 };
