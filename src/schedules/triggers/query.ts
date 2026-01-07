@@ -31,7 +31,8 @@ const run = async () => {
 
     const counter = currentCount ? currentCount.count : 0;
 
-    await query(`RRQ${counter}`, false);
+    const id = `RRQ${counter}`;
+    await query(id, { isManual: false, referenceId: id });
   } catch (e) {
     console.error(e);
   }

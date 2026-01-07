@@ -30,15 +30,14 @@ const { _mockAdditionalActivities } = proxyActivities<typeof activities>({
   heartbeatTimeout: '2 seconds',
 });
 
-const { revertRecord, cleanUpScheduleWhenDone } = proxyActivities<
-  typeof activities
->({
-  startToCloseTimeout: '1 minute',
-  retry: {
-    maximumAttempts: 1,
-  },
-  heartbeatTimeout: '2 seconds',
-});
+const { revertRecord, cleanUpScheduleWhenDone, unpauseQueryStatusSchedule } =
+  proxyActivities<typeof activities>({
+    startToCloseTimeout: '1 minute',
+    retry: {
+      maximumAttempts: 1,
+    },
+    heartbeatTimeout: '2 seconds',
+  });
 
 interface ICompensation {
   message?: string;
@@ -47,6 +46,7 @@ interface ICompensation {
 
 interface IQueryOptions {
   isManual?: boolean;
+  referenceId: string;
 }
 
 export async function query(arg: string, options: IQueryOptions) {
@@ -113,6 +113,18 @@ export async function query(arg: string, options: IQueryOptions) {
       log.error('Workflow failed', { error: e });
       throw e;
     }
+  }
+
+  try {
+    if (!options.referenceId)
+      throw new Error('Reference ID not found encountered');
+    if (options.isManual && !success) {
+      await CancellationScope.nonCancellable(() =>
+        unpauseQueryStatusSchedule(options.referenceId)
+      );
+    }
+  } catch (e) {
+    log.error('Error in unpausing schedule', { error: e });
   }
 
   return {

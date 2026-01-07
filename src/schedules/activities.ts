@@ -68,3 +68,10 @@ export const randomSuccess = async () => {
   await sleep(1000); // fake delay
   return Math.random() < 0.1;
 };
+
+export const unpauseQueryStatusSchedule = async (scheduleId: string) => {
+  const client = Context.current().client;
+  const handle = client.schedule.getHandle(scheduleId);
+  await handle.unpause();
+  console.log('unpaused schedule', scheduleId);
+};

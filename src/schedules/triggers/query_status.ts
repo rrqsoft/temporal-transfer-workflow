@@ -3,7 +3,16 @@ import { loadClientConnectConfig } from '@temporalio/envconfig';
 import { query } from '../workflows';
 import { namespace } from '../../shared';
 
-export const run = async (proposal_id: string, isManual = false) => {
+interface IQueryStatusOptions {
+  isManual?: boolean;
+  referenceId: string;
+}
+
+export const run = async (
+  proposal_id: string,
+  options: IQueryStatusOptions
+) => {
+  const { isManual, referenceId } = options;
   const config = loadClientConnectConfig();
   const connection = await Connection.connect(config.connectionOptions);
   const client = new Client({ connection, namespace });
@@ -16,7 +25,7 @@ export const run = async (proposal_id: string, isManual = false) => {
     action: {
       taskQueue: 'schedulers',
       type: 'startWorkflow',
-      args: [proposal_id, { isManual }],
+      args: [proposal_id, { isManual, referenceId }],
       workflowType: query,
       staticDetails: ``,
       staticSummary: ``,
@@ -37,11 +46,10 @@ export const run = async (proposal_id: string, isManual = false) => {
       ],
     },
     state: {
-      //   remainingActions: isManual ? 1 : 3,
-      //   note: isManual ? 'Only 1 time' : 'Only 3 times',
+      remainingActions: isManual ? 1 : undefined,
       // ISSUE / Bug with ScheduleOverlapPolicy.CANCEL_OTHER
       // the Action triggered by "triggerImmediately" flag doesn't receive cancellation
-      //   triggerImmediately: true,
+      // triggerImmediately: true,
     },
   });
 

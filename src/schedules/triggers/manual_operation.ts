@@ -24,8 +24,8 @@ const run = async () => {
     // NOTE: delete all future scheduled workflows for this id
     // await deleteQueryStatusSchedules(id);
 
-    // // do another query for query
-    await query(`${id}-manual`, true);
+    // do another query for query
+    await query(`${id}-manual`, { isManual: true, referenceId: id });
   } catch (e) {
     console.error(e);
     throw e;
