@@ -110,7 +110,12 @@ export async function query(arg: string, options: IQueryOptions) {
     const deleteWhenOptions = {
       success,
     };
-    await scope.run(() => cleanUpScheduleWhenDone(arg, deleteWhenOptions));
+    await scope.run(() =>
+      cleanUpScheduleWhenDone(
+        options.isManual ? options.referenceId : arg,
+        deleteWhenOptions
+      )
+    );
   } catch (e) {
     if (isCancellation(e) || e instanceof CancelledFailure) {
       await CancellationScope.nonCancellable(() => compensate(compensations));
@@ -134,6 +139,7 @@ export async function query(arg: string, options: IQueryOptions) {
       );
     }
 
+    // graceful cleanup
     if (options.isManual && success) {
       await CancellationScope.nonCancellable(() =>
         deleteReferenceSchedule(options.referenceId)

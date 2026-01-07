@@ -7,6 +7,7 @@ import { Client, Connection, WorkflowIdReusePolicy } from '@temporalio/client';
 import { loadClientConnectConfig } from '@temporalio/envconfig';
 import { namespace } from '../../shared';
 import { query } from '../workflows';
+import { abortSignal } from '../signals';
 
 const run = async () => {
   try {
@@ -31,10 +32,12 @@ const run = async () => {
     const connection = await Connection.connect(config.connectionOptions);
     const client = new Client({ connection, namespace });
 
+    const workflowId = `${id}-manual`;
+
     const handle = await client.workflow.start(query, {
       args: [`${id}-manual`, { isManual: true, referenceId: id }],
       taskQueue: 'status-manual-operations',
-      workflowId: `${id}-manual`,
+      workflowId,
       workflowIdReusePolicy: WorkflowIdReusePolicy.ALLOW_DUPLICATE,
     });
 
