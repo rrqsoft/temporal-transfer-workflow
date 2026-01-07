@@ -4,6 +4,7 @@ import {
   setHandler,
   CancellationScope,
   isCancellation,
+  CancelledFailure,
 } from '@temporalio/workflow';
 import * as activities from './activities';
 import { abortSignal } from './signals';
@@ -13,27 +14,29 @@ const { checkStatus, writeRecord } = proxyActivities<typeof activities>({
   startToCloseTimeout: '1 minute',
   retry: {
     maximumAttempts: 2,
-    backoffCoefficient: 2, //exponential backoff mechanism
+    backoffCoefficient: 2, //exponential backoff mechanism,
+    nonRetryableErrorTypes: ['CancelledFailure'], // for explicit abort query (race condition mitigation)
   },
   heartbeatTimeout: '2 seconds',
 });
 
-const { revertRecord, _mockAdditionalActivities } = proxyActivities<
+const { _mockAdditionalActivities } = proxyActivities<typeof activities>({
+  startToCloseTimeout: '32 seconds',
+  retry: {
+    maximumAttempts: 1,
+    nonRetryableErrorTypes: ['CancelledFailure'], // for explicit abort query (race condition mitigation)
+  },
+  heartbeatTimeout: '2 seconds',
+});
+
+const { revertRecord, cleanUpScheduleWhenDone } = proxyActivities<
   typeof activities
 >({
   startToCloseTimeout: '1 minute',
   retry: {
     maximumAttempts: 1,
-    nonRetryableErrorTypes: ['CancelledFailure'], // for explicit abort query (race condition mitigation)
   },
-  heartbeatTimeout: '45 seconds',
-});
-
-const { deleteQueryStatusSchedules } = proxyActivities<typeof activities>({
-  startToCloseTimeout: '1 minute',
-  retry: {
-    maximumAttempts: 1,
-  },
+  heartbeatTimeout: '2 seconds',
 });
 
 interface ICompensation {
@@ -41,9 +44,15 @@ interface ICompensation {
   fn: () => Promise<void>;
 }
 
-export async function query(arg: string, isManual = false) {
+interface IQueryOptions {
+  isManual?: boolean;
+}
+
+export async function query(arg: string, options: IQueryOptions) {
   const compensations: ICompensation[] = []; // saga pattern
   const scope = new CancellationScope({ cancellable: true });
+  const currentScope = CancellationScope.current();
+  const externalCancelRequested = currentScope.cancelRequested;
 
   setHandler(abortSignal, () => {
     log.info('Aborting query');
@@ -57,6 +66,10 @@ export async function query(arg: string, isManual = false) {
     };
   });
 
+  externalCancelRequested.catch(() => {
+    scope.cancel();
+  });
+
   try {
     await scope.run(() => checkStatus(arg));
   } catch (e) {
@@ -65,7 +78,7 @@ export async function query(arg: string, isManual = false) {
   }
 
   try {
-    await scope.run(async () => writeRecord(arg));
+    await scope.run(() => writeRecord(arg));
 
     compensations.push({
       // compensate on error since record is written
@@ -74,16 +87,25 @@ export async function query(arg: string, isManual = false) {
     });
 
     // Other Activities
-    await scope.run(() => _mockAdditionalActivities(3000)); // simulate delay (while record is written)
+    await scope.run(() =>
+      // simulate delay (while record is written)
+      _mockAdditionalActivities(30000)
+    );
 
     // delete schedule
-    const deleteWhenOptions = { maxActions: 3, isManual };
-    await scope.run(() => deleteQueryStatusSchedules(arg, deleteWhenOptions));
+    const deleteWhenOptions = {
+      maxActions: 3,
+      isManual: options.isManual ?? false,
+    };
+    await scope.run(() => cleanUpScheduleWhenDone(arg, deleteWhenOptions));
   } catch (e) {
-    await compensate(compensations);
-    if (isCancellation(e)) {
-      log.info('Manual cancel submission');
-      // expected cancel
+    if (isCancellation(e) || e instanceof CancelledFailure) {
+      await CancellationScope.nonCancellable(() => compensate(compensations));
+
+      if (e instanceof CancelledFailure) {
+        // overlap policy error or Temporal Service root scope cancellation
+        log.info('CancelledFailure', { error: e });
+      }
     } else {
       log.error('Workflow failed', { error: e });
       throw e;

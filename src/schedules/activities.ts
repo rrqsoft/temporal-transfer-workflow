@@ -31,6 +31,10 @@ export async function writeRecord(str: string) {
 }
 
 export async function _mockAdditionalActivities(ms = 5000 * 25) {
+  setInterval(() => {
+    // heartbeat
+    Context.current().heartbeat('Pulsing every 1 second');
+  }, 1000);
   await sleep(ms);
 }
 
@@ -45,7 +49,7 @@ interface IDeleteQueryStatusSchedulesOptions {
   maxActions: number;
   isManual: boolean;
 }
-export const deleteQueryStatusSchedules = async (
+export const cleanUpScheduleWhenDone = async (
   proposal_id: string,
   options: IDeleteQueryStatusSchedulesOptions
 ) => {
@@ -55,11 +59,12 @@ export const deleteQueryStatusSchedules = async (
 
   const description = await handle.describe();
   const actionsTaken = description.info.numActionsTaken;
+
   if (actionsTaken < options.maxActions && !options.isManual) {
     console.log('Not deleting schedule', proposal_id, actionsTaken);
     return { scheduleDeleted: false };
   }
   console.log('Deleting schedule', proposal_id, actionsTaken);
   await handle.delete();
-  return { scheduleDeleted: true };
+  return { scheduleDeleted: true, actionsTaken };
 };
