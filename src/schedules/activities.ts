@@ -1,6 +1,6 @@
 import { DB } from './db';
 const db = DB.getInstance();
-import { sleep, Context } from '@temporalio/activity';
+import { sleep, Context, log } from '@temporalio/activity';
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS records (
@@ -44,20 +44,15 @@ export async function revertRecord(str: string) {
 
 interface IDeleteQueryStatusSchedulesOptions {
   success: boolean;
-  isManual: boolean;
 }
 export const cleanUpScheduleWhenDone = async (
   proposal_id: string,
   options: IDeleteQueryStatusSchedulesOptions
 ) => {
   const client = Context.current().client;
-
   const handle = client.schedule.getHandle(proposal_id);
 
-  // const description = await handle.describe();
-  // const actionsTaken = description.info.numActionsTaken;
-
-  if (!options.success || options.isManual) {
+  if (!options.success) {
     return { scheduleDeleted: false, ...options };
   }
   await handle.delete();
@@ -66,7 +61,7 @@ export const cleanUpScheduleWhenDone = async (
 
 export const randomSuccess = async () => {
   await sleep(1000); // fake delay
-  return Math.random() < 0.1;
+  return Math.random() < 0.2;
 };
 
 export const unpauseQueryStatusSchedule = async (scheduleId: string) => {
@@ -74,4 +69,14 @@ export const unpauseQueryStatusSchedule = async (scheduleId: string) => {
   const handle = client.schedule.getHandle(scheduleId);
   await handle.unpause();
   console.log('unpaused schedule', scheduleId);
+};
+
+export const deleteReferenceSchedule = async (referenceId: string) => {
+  const client = Context.current().client;
+  const handle = client.schedule.getHandle(referenceId);
+  try {
+    await handle.delete();
+  } catch (e) {
+    log.info('Already deleted reference schedule ' + referenceId);
+  }
 };

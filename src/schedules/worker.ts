@@ -14,7 +14,22 @@ async function schedulers() {
   await worker.run();
 }
 
+async function statusManualOperations() {
+  const worker = await Worker.create({
+    workflowsPath: require.resolve('./workflows'),
+    activities: schedulesActivities,
+    namespace,
+    taskQueue: 'status-manual-operations',
+  });
+  await worker.run();
+}
+
 schedulers().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
+
+statusManualOperations().catch((err) => {
   console.error(err);
   process.exit(1);
 });

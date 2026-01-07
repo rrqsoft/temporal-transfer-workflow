@@ -13,7 +13,7 @@
     "worker": "ts-node src/worker.ts",
     "worker.watch": "nodemon src/worker.ts",
     "schedule.start": "ts-node src/schedules/triggers/query.ts",
-    "schedule.abort": "ts-node src/schedules/triggers/manual_operation.ts",
+    "schedule.manual": "ts-node src/schedules/triggers/manual_operation.ts",
     "schedule.worker": "ts-node src/schedules/worker.ts",
     "schedule.worker.watch": "nodemon src/schedules/worker.ts"
   },

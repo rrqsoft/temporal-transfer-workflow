@@ -15,8 +15,7 @@ const { checkStatus, writeRecord, randomSuccess } = proxyActivities<
 >({
   startToCloseTimeout: '1 minute',
   retry: {
-    maximumAttempts: 2,
-    backoffCoefficient: 2, //exponential backoff mechanism,
+    maximumAttempts: 1,
     nonRetryableErrorTypes: ['CancelledFailure'], // for explicit abort query (race condition mitigation)
   },
 });
@@ -24,20 +23,32 @@ const { checkStatus, writeRecord, randomSuccess } = proxyActivities<
 const { _mockAdditionalActivities } = proxyActivities<typeof activities>({
   startToCloseTimeout: '32 seconds',
   retry: {
-    maximumAttempts: 1,
+    maximumAttempts: 2,
+    backoffCoefficient: 2,
     nonRetryableErrorTypes: ['CancelledFailure'], // for explicit abort query (race condition mitigation)
   },
   heartbeatTimeout: '2 seconds',
 });
 
-const { revertRecord, cleanUpScheduleWhenDone, unpauseQueryStatusSchedule } =
-  proxyActivities<typeof activities>({
-    startToCloseTimeout: '1 minute',
-    retry: {
-      maximumAttempts: 1,
-    },
-    heartbeatTimeout: '2 seconds',
-  });
+const { revertRecord } = proxyActivities<typeof activities>({
+  startToCloseTimeout: '1 minute',
+  retry: {
+    maximumAttempts: 1,
+  },
+  heartbeatTimeout: '2 seconds',
+});
+
+const {
+  cleanUpScheduleWhenDone,
+  unpauseQueryStatusSchedule,
+  deleteReferenceSchedule,
+} = proxyActivities<typeof activities>({
+  startToCloseTimeout: '1 minute',
+  retry: {
+    maximumAttempts: 1,
+  },
+  heartbeatTimeout: '2 seconds',
+});
 
 interface ICompensation {
   message?: string;
@@ -82,7 +93,7 @@ export async function query(arg: string, options: IQueryOptions) {
   try {
     await scope.run(() => writeRecord(arg));
 
-    compensations.push({
+    compensations.unshift({
       // compensate on error since record is written
       fn: async () => revertRecord(arg), // or compensation transaction instead of deleting the record
       message: 'Revert record',
@@ -98,7 +109,6 @@ export async function query(arg: string, options: IQueryOptions) {
     success = await scope.run(() => randomSuccess());
     const deleteWhenOptions = {
       success,
-      isManual: options.isManual ?? false,
     };
     await scope.run(() => cleanUpScheduleWhenDone(arg, deleteWhenOptions));
   } catch (e) {
@@ -121,6 +131,12 @@ export async function query(arg: string, options: IQueryOptions) {
     if (options.isManual && !success) {
       await CancellationScope.nonCancellable(() =>
         unpauseQueryStatusSchedule(options.referenceId)
+      );
+    }
+
+    if (options.isManual && success) {
+      await CancellationScope.nonCancellable(() =>
+        deleteReferenceSchedule(options.referenceId)
       );
     }
   } catch (e) {
