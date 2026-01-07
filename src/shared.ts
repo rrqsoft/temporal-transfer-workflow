@@ -1,5 +1,5 @@
 // @@@SNIPSTART money-transfer-project-template-ts-constants
-export const namespace = 'rrq';
+export const namespace = 'pms.one';
 export const taskQueueName = 'transfer-queue';
 export const deepTaskQueueName = 'deep-queue';
 // @@@SNIPEND
