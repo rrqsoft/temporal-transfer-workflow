@@ -78,12 +78,9 @@ export async function query(arg: string, options: IQueryOptions) {
     };
   });
 
-  externalCancelRequested.catch(() => {
-    scope.cancel();
-  });
-
   try {
-    await scope.run(() => checkStatus(arg));
+    const checkStatusTask = scope.run(() => checkStatus(arg));
+    await Promise.race([checkStatusTask, currentScope.cancelRequested]);
   } catch (e) {
     log.error('Error in checking status', { error: e });
     throw e;
@@ -91,7 +88,8 @@ export async function query(arg: string, options: IQueryOptions) {
 
   let success = false;
   try {
-    await scope.run(() => writeRecord(arg));
+    const writeRecordTask = scope.run(() => writeRecord(arg));
+    await Promise.race([writeRecordTask, currentScope.cancelRequested]);
 
     compensations.unshift({
       // compensate on error since record is written
@@ -100,22 +98,26 @@ export async function query(arg: string, options: IQueryOptions) {
     });
 
     // Other Activities
-    await scope.run(() =>
+    const otherActivitiesTask = scope.run(() =>
       // simulate delay (while record is written)
-      _mockAdditionalActivities(85000)
+      _mockAdditionalActivities(8500)
     );
+    await Promise.race([otherActivitiesTask, currentScope.cancelRequested]);
 
     // delete schedule
-    success = await scope.run(() => randomSuccess());
+    const successTask = scope.run(() => randomSuccess());
+    const res = await Promise.race([successTask, currentScope.cancelRequested]);
+    success = typeof res === 'boolean' ? res : false;
     const deleteWhenOptions = {
       success,
     };
-    await scope.run(() =>
+    const cleanUpTask = scope.run(() =>
       cleanUpScheduleWhenDone(
         options.isManual ? options.referenceId : arg,
         deleteWhenOptions
       )
     );
+    await Promise.race([cleanUpTask, currentScope.cancelRequested]);
   } catch (e) {
     if (isCancellation(e) || e instanceof CancelledFailure) {
       await CancellationScope.nonCancellable(() => compensate(compensations));
